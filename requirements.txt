@@ -3,3 +3,4 @@ cloudinary
 mysql-connector-python
 pillow
 pandas
+openpyxl
