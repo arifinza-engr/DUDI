@@ -1,0 +1,247 @@
+import streamlit as st
+import cloudinary
+import cloudinary.uploader
+import mysql.connector
+from PIL import Image
+import pandas as pd
+
+# Konfigurasi Cloudinary
+cloudinary.config(
+    cloud_name = 'dopcryjje',  # Ganti dengan Cloud Name Anda
+    api_key = '517418157241333',  # Ganti dengan API Key Anda
+    api_secret = '-D8pHN6k55f8rAfmgjnESATQcAs'  # Ganti dengan API Secret Anda
+)
+
+# Load data dari Excel
+file_path = 'Data Dukung DUDI 2024 Baru.xlsx'
+excel_data = pd.ExcelFile(file_path)
+
+# Membaca data dari sheet kedua
+df = pd.read_excel(excel_data, sheet_name=excel_data.sheet_names[1])
+
+# Normalisasi kabupaten menjadi huruf kapital semua
+df['Kab/Kota'] = df['Kab/Kota'].str.upper()
+
+# Menyiapkan data untuk dropdown Kabupaten dan Nama
+kabupaten_list = df['Kab/Kota'].unique()
+
+# HEADER
+st.header("BPPP TEGAL")
+
+# Fungsi untuk mereset form dan gambar
+def reset_form():
+    if "form_data" in st.session_state:
+        del st.session_state["form_data"]
+    if "uploaded_file" in st.session_state:
+        del st.session_state["uploaded_file"]
+    if "uploaded_file2" in st.session_state:
+        del st.session_state["uploaded_file2"]
+
+# Menampilkan dropdown untuk Kabupaten
+kabupaten_choice = st.selectbox("Pilih Kabupaten", kabupaten_list, key="kabupaten_choice")
+
+# Jika Kabupaten diubah, reset form dan gambar
+if "kabupaten_choice" in st.session_state and st.session_state.kabupaten_choice != kabupaten_choice:
+    reset_form()
+
+# Filter data berdasarkan Kabupaten yang dipilih
+filtered_df = df[df['Kab/Kota'] == kabupaten_choice]
+
+# Menampilkan dropdown untuk Nama berdasarkan Kabupaten yang dipilih
+nama_list = filtered_df['Nama Purnawidya']
+nama_choice = st.selectbox("Pilih Nama", nama_list, key="nama_choice")
+
+# Menampilkan jumlah nama di Kabupaten yang dipilih
+jumlah_nama = len(filtered_df)
+st.write(f"Jumlah nama di Kabupaten {kabupaten_choice}: {jumlah_nama}")
+
+# Jika Nama diubah, reset form dan gambar
+if "nama_choice" in st.session_state and st.session_state.nama_choice != nama_choice:
+    reset_form()
+
+
+# Menampilkan data lainnya secara otomatis setelah memilih Nama
+selected_data = filtered_df[filtered_df['Nama Purnawidya'] == nama_choice].iloc[0]
+
+# Menampilkan data peserta
+st.write("### Data Peserta:")
+st.write(f"**NIK**: {selected_data['NIK']}")
+st.write(f"**Alamat**: {selected_data['Alamat']}")
+st.write(f"**Jenis Kelamin**: {selected_data['Jenis Kelamin  (L/P)']}")
+st.write(f"**Pendidikan Terakhir**: {selected_data['Pendidikan Terakhir']}")
+st.write(f"**Nomor Telepon**: {selected_data['Nomor Tlp.']}")
+st.write(f"**Nama Pelatihan**: {selected_data['Nama Pelatihan']}")
+
+# --- Menambahkan Form Input Kosong untuk Data Tambahan ---
+st.write("### KUISIONER EVALUASI PASCA PELATIHAN MASYARAKAT")
+
+# Form data untuk 16 pertanyaan dengan 4 pilihan (Likert Scale)
+likert_options = ['Sangat Tidak Setuju', 'Tidak Setuju', 'Setuju', 'Sangat Setuju']
+form_data = {}
+
+# Group 1: Pertanyaan 1 - 3
+st.subheader("1. Relevansi Isi Pelatihan")
+form_data["Pertanyaan11"] = st.selectbox("Pelatihan yang dilakukan sudah relevan/bersangkut paut dengan pekerjaan Anda sekarang dan tujuan Anda", likert_options)
+form_data["Pertanyaan12"] = st.selectbox("Isi Pelatihan (materi, presesntasi, dll) mudah dipahami", likert_options)
+form_data["Pertanyaan13"] = st.selectbox("Isi Pelatihan (materi, presesntasi, dll) sudah menjelaskan topik yang Anda harapkan", likert_options)
+
+# Group 2: Pertanyaan 4 - 6
+st.subheader("2. Penerapan/Pengaplikasian Keterampilan, Pengetahuan, dan Sikap")
+form_data["Pertanyaan21"] = st.selectbox("Anda mampu menerapkan/mempraktikan Pengetahuan/Keterampilan/Sikap yang anda dapatkan dari pelatihan di tempat kerja anda", likert_options)
+form_data["Pertanyaan22"] = st.selectbox("Anda mampu menjelaskan Pengetahuan/Keterampilan/Sikap yang anda peroleh dari orang lain", likert_options)
+
+# Group 3: Pertanyaan 7 - 9
+st.subheader("3. Dampak Pelatihan Terhadap Kinerja")
+form_data["Pertanyaan31"] = st.selectbox("Pelatihan yang dilakukan sudah bermanfaat terhadap pekerjaan anda", likert_options)
+form_data["Pertanyaan32"] = st.text_input("Jika Setuju, Apa bentuk manfaatnya? (Optional)")
+form_data["Pertanyaan33"] = st.selectbox("Anda memperoleh kesempatan atau peluang baru yang disebabkan oleh pelatihan yang telah anda lakukan", likert_options)
+form_data["Pertanyaan34"] = st.text_input("Jika setuju, seperti apa kesempatan dan peluang barunya? (Optional)")
+form_data["Pertanyaan35"] = st.selectbox("Anda merasa lebih mampu dan lebih percaya diri dalam pekerjaan anda setelah ikut pelatihan", likert_options)
+form_data["Pertanyaan36"] = st.text_input("Jika setuju, Apa yang membuat anda lebih percaya diri? (Optional)")
+
+# Group 4: Pertanyaan 10 - 12
+st.subheader("4. Dampak Pelatihan Terhadap Pendapatan dan Produksi")
+form_data["Pertanyaan41"] = st.selectbox("Anda memperoleh peningkatan pendapatan dan setelah mengikuti pelatihan", likert_options)
+form_data["Pertanyaan42"] = st.text_input("Jika Setuju, Berapa peningkatannya? (dalam presentase atau rupiah) - (Optional)")
+form_data["Pertanyaan43"] = st.selectbox("Anda memperoleh peningkatan produksi dan setelah mengikuti pelatihan", likert_options)
+form_data["Pertanyaan44"] = st.text_input("Jika Setuju, Berapa peningkatannya? (Optional)")
+
+# Group 5: Pertanyaan 13 - 15
+st.subheader("5. Peningkatan Kualitas (Optional)")
+form_data["Pertanyaan51"] = st.text_input("Yang menurut anda paling berguna dalam pelatihan ini")
+form_data["Pertanyaan52"] = st.text_input("Yang menurut anda paling tidak berguna dalam pelatihan ini", value="tidak ada", disabled=True)
+form_data["Pertanyaan53"] = st.text_input("Saran Anda untuk pelaksanaan pelatihan ke depannya")
+form_data["Pertanyaan54"] = st.text_input("Saran Anda untuk materi pelatihan ke depannya")
+form_data["Pertanyaan55"] = st.text_input("Tambahan*")
+
+# Menambahkan input foto dokumentasi
+st.write("### Dokumentasi Foto Geotag (Optional)")
+uploaded_file = st.file_uploader("Upload Foto Dokumentasi", type=["jpg", "jpeg", "png"], key="uploaded_file")
+
+# Menambahkan input foto dokumentasi
+st.write("### Dokumentasi Foto Non Geotag (Optional)")
+uploaded_file2 = st.file_uploader("Upload Foto Dokumentasi", type=["jpg", "jpeg", "png"], key="uploaded_file2")
+
+# Fungsi untuk meng-upload ke Cloudinary
+def upload_to_cloudinary(image_file):
+    try:
+        upload_result = cloudinary.uploader.upload(image_file)
+        return upload_result['url']
+    except Exception as e:
+        st.error(f"Terjadi kesalahan saat meng-upload gambar: {e}")
+        return None
+
+# Tombol untuk submit data ke database MySQL
+submit_button = st.button("Submit Jawaban")
+
+if submit_button:
+    try:
+        # Koneksi ke database MySQL untuk pengecekan nama
+        conn_check = mysql.connector.connect(
+            host="154.26.133.67",  # Ganti dengan host MySQL Anda
+            user="remotex",        # Ganti dengan username MySQL Anda
+            password="84pUcAHV",   # Ganti dengan password MySQL Anda
+            database="DUDI"        # Ganti dengan nama database Anda
+        )
+
+        cursor_check = conn_check.cursor()
+
+        # Query untuk mengecek apakah NIK atau Nama sudah ada di database
+        check_query = """
+            SELECT COUNT(*) FROM data_peserta 
+            WHERE NIK = %s OR Nama = %s
+        """
+        cursor_check.execute(check_query, (selected_data['NIK'], selected_data['Nama Purnawidya']))
+        result = cursor_check.fetchone()
+
+        # Jika sudah ada, tampilkan pesan error dan hentikan submit
+        if result[0] > 0:
+            st.error("Nama atau NIK sudah terdaftar di database. Data tidak bisa disubmit.")
+        else:
+            # Proses upload gambar ke Cloudinary hanya setelah tombol submit ditekan
+            imgur_url_geotag = None
+            imgur_url_non_geotag = None
+            
+            if uploaded_file is not None:
+                imgur_url_geotag = upload_to_cloudinary(uploaded_file)
+
+            if uploaded_file2 is not None:
+                imgur_url_non_geotag = upload_to_cloudinary(uploaded_file2)
+
+            # Jika nama atau NIK belum terdaftar, lanjutkan proses submit
+            new_data = {
+                'NIK': selected_data['NIK'],
+                'Nama': selected_data['Nama Purnawidya'],
+                'Alamat': selected_data['Alamat'],
+                'Kabupaten': kabupaten_choice,
+                'Jenis_Kelamin': selected_data['Jenis Kelamin  (L/P)'],
+                'Pendidikan_Terakhir': selected_data['Pendidikan Terakhir'],
+                'Nomor_Tlp': selected_data['Nomor Tlp.'],
+                'Pertanyaan11': form_data["Pertanyaan11"],
+                'Pertanyaan12': form_data["Pertanyaan12"],
+                'Pertanyaan13': form_data["Pertanyaan13"],
+                'Pertanyaan21': form_data["Pertanyaan21"],
+                'Pertanyaan22': form_data["Pertanyaan22"],
+                'Pertanyaan31': form_data["Pertanyaan31"],
+                'Pertanyaan32': form_data["Pertanyaan32"] if form_data["Pertanyaan32"] else None, 
+                'Pertanyaan33': form_data["Pertanyaan33"],
+                'Pertanyaan34': form_data["Pertanyaan34"] if form_data["Pertanyaan34"] else None, 
+                'Pertanyaan35': form_data["Pertanyaan35"],
+                'Pertanyaan36': form_data["Pertanyaan36"] if form_data["Pertanyaan36"] else None, 
+                'Pertanyaan41': form_data["Pertanyaan41"],
+                'Pertanyaan42': form_data["Pertanyaan42"] if form_data["Pertanyaan42"] else None, 
+                'Pertanyaan43': form_data["Pertanyaan43"],
+                'Pertanyaan44': form_data["Pertanyaan44"] if form_data["Pertanyaan44"] else None, 
+                'Pertanyaan51': form_data["Pertanyaan51"] if form_data["Pertanyaan51"] else None, 
+                'Pertanyaan52': form_data["Pertanyaan52"] if form_data["Pertanyaan52"] else None, 
+                'Pertanyaan53': form_data["Pertanyaan53"] if form_data["Pertanyaan53"] else None, 
+                'Pertanyaan54': form_data["Pertanyaan54"] if form_data["Pertanyaan54"] else None, 
+                'Pertanyaan55': form_data["Pertanyaan55"] if form_data["Pertanyaan55"] else None,
+                'Foto_Dokumentasi_Geotag': imgur_url_geotag,
+                'Foto_Dokumentasi_Non_Geotag': imgur_url_non_geotag
+            }
+
+            # Koneksi ke database MySQL untuk menyimpan data
+            conn = mysql.connector.connect(
+                host="154.26.133.67",  # Ganti dengan host MySQL Anda
+                user="remotex",        # Ganti dengan username MySQL Anda
+                password="84pUcAHV",   # Ganti dengan password MySQL Anda
+                database="DUDI"        # Ganti dengan nama database Anda
+            )
+
+            cursor = conn.cursor()
+
+            # SQL query untuk memasukkan data ke tabel
+            query = """
+                INSERT INTO data_peserta 
+                (NIK, Nama, Alamat, Kabupaten, Jenis_Kelamin, Pendidikan_Terakhir, Nomor_Tlp,
+                Pertanyaan11, Pertanyaan12, Pertanyaan13, Pertanyaan21, Pertanyaan22,
+                Pertanyaan31, Pertanyaan32, Pertanyaan33, Pertanyaan34, Pertanyaan35, Pertanyaan36,
+                Pertanyaan41, Pertanyaan42, Pertanyaan43, Pertanyaan44, Pertanyaan51, Pertanyaan52,
+                Pertanyaan53, Pertanyaan54, Pertanyaan55, Foto_Dokumentasi_Geotag, Foto_Dokumentasi_Non_Geotag)
+
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """
+
+            values = tuple(new_data.values())
+
+            # Eksekusi query dengan data
+            cursor.execute(query, values)
+
+            # Commit transaksi
+            conn.commit()
+
+            # Menampilkan konfirmasi
+            st.success("Data berhasil disimpan!")
+
+    except mysql.connector.Error as e:
+        st.error(f"Terjadi kesalahan saat menyimpan data: {e}")
+    finally:
+        # Pastikan koneksi ditutup hanya jika terbuka
+        if 'conn' in locals() and conn.is_connected():
+            cursor.close()
+            conn.close()
+
+        if 'conn_check' in locals() and conn_check.is_connected():
+            cursor_check.close()
+            conn_check.close()

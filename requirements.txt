@@ -1,0 +1,5 @@
+streamlit
+cloudinary
+mysql-connector-python
+pillow
+pandas
