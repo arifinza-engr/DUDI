@@ -2,27 +2,61 @@ import streamlit as st
 import cloudinary
 import cloudinary.uploader
 import mysql.connector
-from PIL import Image
 import pandas as pd
 
 # Konfigurasi Cloudinary
 cloudinary.config(
-    cloud_name = 'dopcryjje',  # Ganti dengan Cloud Name Anda
-    api_key = '517418157241333',  # Ganti dengan API Key Anda
-    api_secret = '-D8pHN6k55f8rAfmgjnESATQcAs'  # Ganti dengan API Secret Anda
+    cloud_name='dopcryjje',
+    api_key='517418157241333',
+    api_secret='-D8pHN6k55f8rAfmgjnESATQcAs'
 )
 
-# Load data dari Excel
-file_path = 'Data Dukung DUDI 2024 Baru.xlsx'
-excel_data = pd.ExcelFile(file_path)
+# Fungsi untuk menghubungkan ke database
+def create_db_connection():
+    return mysql.connector.connect(
+        host="154.26.133.67",
+        user="remotex",
+        password="84pUcAHV",
+        database="DUDI"
+    )
 
-# Membaca data dari sheet kedua
-df = pd.read_excel(excel_data, sheet_name=excel_data.sheet_names[1])
+# Fungsi untuk meng-upload gambar ke Cloudinary
+def upload_to_cloudinary(image_file):
+    try:
+        upload_result = cloudinary.uploader.upload(image_file)
+        return upload_result['url']
+    except Exception as e:
+        st.error(f"Terjadi kesalahan saat meng-upload gambar: {e}")
+        return None
 
-# Normalisasi kabupaten menjadi huruf kapital semua
-df['Kab/Kota'] = df['Kab/Kota'].str.upper()
+# Fungsi untuk menyimpan data ke database
+def save_data_to_db(new_data):
+    conn = create_db_connection()
+    cursor = conn.cursor()
+    query = """
+        INSERT INTO data_peserta 
+        (NIK, Nama, Alamat, Kabupaten, Jenis_Kelamin, Pendidikan_Terakhir, Nomor_Tlp,
+        Pertanyaan11, Pertanyaan12, Pertanyaan13, Pertanyaan21, Pertanyaan22,
+        Pertanyaan31, Pertanyaan32, Pertanyaan33, Pertanyaan34, Pertanyaan35, Pertanyaan36,
+        Pertanyaan41, Pertanyaan42, Pertanyaan43, Pertanyaan44, Pertanyaan51, Pertanyaan52,
+        Pertanyaan53, Pertanyaan54, Pertanyaan55, Foto_Dokumentasi_Geotag, Foto_Dokumentasi_Non_Geotag)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    """
+    cursor.execute(query, tuple(new_data.values()))
+    conn.commit()
+    cursor.close()
+    conn.close()
 
-# Menyiapkan data untuk dropdown Kabupaten dan Nama
+# Load data dari Excel dan cache
+@st.cache_data
+def load_data():
+    file_path = 'Data Dukung DUDI 2024 Baru.xlsx'
+    df = pd.read_excel(file_path, sheet_name=1)
+    df['Kab/Kota'] = df['Kab/Kota'].str.upper()
+    return df
+
+# Load data
+df = load_data()
 kabupaten_list = df['Kab/Kota'].unique()
 
 # HEADER
@@ -30,40 +64,31 @@ st.header("BPPP TEGAL")
 
 # Fungsi untuk mereset form dan gambar
 def reset_form():
-    if "form_data" in st.session_state:
-        del st.session_state["form_data"]
-    if "uploaded_file" in st.session_state:
-        del st.session_state["uploaded_file"]
-    if "uploaded_file2" in st.session_state:
-        del st.session_state["uploaded_file2"]
+    for key in ["form_data", "uploaded_file", "uploaded_file2"]:
+        if key in st.session_state:
+            del st.session_state[key]
 
 # Menampilkan dropdown untuk Kabupaten
 kabupaten_choice = st.selectbox("Pilih Kabupaten", kabupaten_list, key="kabupaten_choice")
 
-# Jika Kabupaten diubah, reset form dan gambar
+# Reset form jika kabupaten diubah
 if "kabupaten_choice" in st.session_state and st.session_state.kabupaten_choice != kabupaten_choice:
     reset_form()
 
 # Filter data berdasarkan Kabupaten yang dipilih
 filtered_df = df[df['Kab/Kota'] == kabupaten_choice]
-
-# Menampilkan dropdown untuk Nama berdasarkan Kabupaten yang dipilih
 nama_list = filtered_df['Nama Purnawidya']
 nama_choice = st.selectbox("Pilih Nama", nama_list, key="nama_choice")
 
 # Menampilkan jumlah nama di Kabupaten yang dipilih
-jumlah_nama = len(filtered_df)
-st.write(f"Jumlah nama di Kabupaten {kabupaten_choice}: {jumlah_nama}")
+st.write(f"Jumlah nama di Kabupaten {kabupaten_choice}: {len(filtered_df)}")
 
-# Jika Nama diubah, reset form dan gambar
+# Reset form jika nama diubah
 if "nama_choice" in st.session_state and st.session_state.nama_choice != nama_choice:
     reset_form()
 
-
-# Menampilkan data lainnya secara otomatis setelah memilih Nama
-selected_data = filtered_df[filtered_df['Nama Purnawidya'] == nama_choice].iloc[0]
-
 # Menampilkan data peserta
+selected_data = filtered_df[filtered_df['Nama Purnawidya'] == nama_choice].iloc[0]
 st.write("### Data Peserta:")
 st.write(f"**NIK**: {selected_data['NIK']}")
 st.write(f"**Alamat**: {selected_data['Alamat']}")
@@ -82,8 +107,8 @@ form_data = {}
 # Group 1: Pertanyaan 1 - 3
 st.subheader("1. Relevansi Isi Pelatihan")
 form_data["Pertanyaan11"] = st.selectbox("Pelatihan yang dilakukan sudah relevan/bersangkut paut dengan pekerjaan Anda sekarang dan tujuan Anda", likert_options)
-form_data["Pertanyaan12"] = st.selectbox("Isi Pelatihan (materi, presesntasi, dll) mudah dipahami", likert_options)
-form_data["Pertanyaan13"] = st.selectbox("Isi Pelatihan (materi, presesntasi, dll) sudah menjelaskan topik yang Anda harapkan", likert_options)
+form_data["Pertanyaan12"] = st.selectbox("Isi Pelatihan (materi, presentasi, dll) mudah dipahami", likert_options)
+form_data["Pertanyaan13"] = st.selectbox("Isi Pelatihan (materi, presentasi, dll) sudah menjelaskan topik yang Anda harapkan", likert_options)
 
 # Group 2: Pertanyaan 4 - 6
 st.subheader("2. Penerapan/Pengaplikasian Keterampilan, Pengetahuan, dan Sikap")
@@ -101,9 +126,9 @@ form_data["Pertanyaan36"] = st.text_input("Jika setuju, Apa yang membuat anda le
 
 # Group 4: Pertanyaan 10 - 12
 st.subheader("4. Dampak Pelatihan Terhadap Pendapatan dan Produksi")
-form_data["Pertanyaan41"] = st.selectbox("Anda memperoleh peningkatan pendapatan dan setelah mengikuti pelatihan", likert_options)
+form_data["Pertanyaan41"] = st.selectbox("Anda memperoleh peningkatan pendapatan setelah mengikuti pelatihan", likert_options)
 form_data["Pertanyaan42"] = st.text_input("Jika Setuju, Berapa peningkatannya? (dalam presentase atau rupiah) - (Optional)")
-form_data["Pertanyaan43"] = st.selectbox("Anda memperoleh peningkatan produksi dan setelah mengikuti pelatihan", likert_options)
+form_data["Pertanyaan43"] = st.selectbox("Anda memperoleh peningkatan produksi setelah mengikuti pelatihan", likert_options)
 form_data["Pertanyaan44"] = st.text_input("Jika Setuju, Berapa peningkatannya? (Optional)")
 
 # Group 5: Pertanyaan 13 - 15
@@ -118,18 +143,9 @@ form_data["Pertanyaan55"] = st.text_input("Tambahan*")
 st.write("### Dokumentasi Foto Geotag (Optional)")
 uploaded_file = st.file_uploader("Upload Foto Dokumentasi", type=["jpg", "jpeg", "png"], key="uploaded_file")
 
-# Menambahkan input foto dokumentasi
+# Menambahkan input foto dokumentasi non-geotag
 st.write("### Dokumentasi Foto Non Geotag (Optional)")
 uploaded_file2 = st.file_uploader("Upload Foto Dokumentasi", type=["jpg", "jpeg", "png"], key="uploaded_file2")
-
-# Fungsi untuk meng-upload ke Cloudinary
-def upload_to_cloudinary(image_file):
-    try:
-        upload_result = cloudinary.uploader.upload(image_file)
-        return upload_result['url']
-    except Exception as e:
-        st.error(f"Terjadi kesalahan saat meng-upload gambar: {e}")
-        return None
 
 # Tombol untuk submit data ke database MySQL
 submit_button = st.button("Submit Jawaban")
@@ -137,13 +153,7 @@ submit_button = st.button("Submit Jawaban")
 if submit_button:
     try:
         # Koneksi ke database MySQL untuk pengecekan nama
-        conn_check = mysql.connector.connect(
-            host="154.26.133.67",  # Ganti dengan host MySQL Anda
-            user="remotex",        # Ganti dengan username MySQL Anda
-            password="84pUcAHV",   # Ganti dengan password MySQL Anda
-            database="DUDI"        # Ganti dengan nama database Anda
-        )
-
+        conn_check = create_db_connection()
         cursor_check = conn_check.cursor()
 
         # Query untuk mengecek apakah NIK atau Nama sudah ada di database
@@ -158,15 +168,9 @@ if submit_button:
         if result[0] > 0:
             st.error("Nama atau NIK sudah terdaftar di database. Data tidak bisa disubmit.")
         else:
-            # Proses upload gambar ke Cloudinary hanya setelah tombol submit ditekan
-            imgur_url_geotag = None
-            imgur_url_non_geotag = None
-            
-            if uploaded_file is not None:
-                imgur_url_geotag = upload_to_cloudinary(uploaded_file)
-
-            if uploaded_file2 is not None:
-                imgur_url_non_geotag = upload_to_cloudinary(uploaded_file2)
+            # Proses upload gambar ke Cloudinary
+            imgur_url_geotag = upload_to_cloudinary(uploaded_file) if uploaded_file is not None else None
+            imgur_url_non_geotag = upload_to_cloudinary(uploaded_file2) if uploaded_file2 is not None else None
 
             # Jika nama atau NIK belum terdaftar, lanjutkan proses submit
             new_data = {
@@ -201,35 +205,8 @@ if submit_button:
                 'Foto_Dokumentasi_Non_Geotag': imgur_url_non_geotag
             }
 
-            # Koneksi ke database MySQL untuk menyimpan data
-            conn = mysql.connector.connect(
-                host="154.26.133.67",  # Ganti dengan host MySQL Anda
-                user="remotex",        # Ganti dengan username MySQL Anda
-                password="84pUcAHV",   # Ganti dengan password MySQL Anda
-                database="DUDI"        # Ganti dengan nama database Anda
-            )
-
-            cursor = conn.cursor()
-
-            # SQL query untuk memasukkan data ke tabel
-            query = """
-                INSERT INTO data_peserta 
-                (NIK, Nama, Alamat, Kabupaten, Jenis_Kelamin, Pendidikan_Terakhir, Nomor_Tlp,
-                Pertanyaan11, Pertanyaan12, Pertanyaan13, Pertanyaan21, Pertanyaan22,
-                Pertanyaan31, Pertanyaan32, Pertanyaan33, Pertanyaan34, Pertanyaan35, Pertanyaan36,
-                Pertanyaan41, Pertanyaan42, Pertanyaan43, Pertanyaan44, Pertanyaan51, Pertanyaan52,
-                Pertanyaan53, Pertanyaan54, Pertanyaan55, Foto_Dokumentasi_Geotag, Foto_Dokumentasi_Non_Geotag)
-
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """
-
-            values = tuple(new_data.values())
-
-            # Eksekusi query dengan data
-            cursor.execute(query, values)
-
-            # Commit transaksi
-            conn.commit()
+            # Simpan data ke database
+            save_data_to_db(new_data)
 
             # Menampilkan konfirmasi
             st.success("Data berhasil disimpan!")
@@ -238,10 +215,10 @@ if submit_button:
         st.error(f"Terjadi kesalahan saat menyimpan data: {e}")
     finally:
         # Pastikan koneksi ditutup hanya jika terbuka
-        if 'conn' in locals() and conn.is_connected():
-            cursor.close()
-            conn.close()
-
         if 'conn_check' in locals() and conn_check.is_connected():
             cursor_check.close()
             conn_check.close()
+
+# Menambahkan tombol untuk mereset form
+if st.button("Reset Form"):
+    reset_form()
