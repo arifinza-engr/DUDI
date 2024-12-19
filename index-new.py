@@ -159,7 +159,7 @@ if submit_button:
         # Query untuk mengecek apakah NIK atau Nama sudah ada di database
         check_query = """
             SELECT COUNT(*) FROM data_peserta 
-            WHERE NIK = %s OR Nama = %s
+            WHERE NIK = %s AND Nama = %s
         """
         cursor_check.execute(check_query, (selected_data['NIK'], selected_data['Nama Purnawidya']))
         result = cursor_check.fetchone()
