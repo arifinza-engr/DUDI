@@ -77,18 +77,22 @@ if "kabupaten_choice" in st.session_state and st.session_state.kabupaten_choice 
 
 # Filter data berdasarkan Kabupaten yang dipilih
 filtered_df = df[df['Kab/Kota'] == kabupaten_choice]
-nama_list = filtered_df['Nama Purnawidya']
+
+# Jika terdapat lebih dari satu data dengan nama yang sama, tambahkan dropdown NIK untuk memperjelas
+nama_list = filtered_df['Nama Purnawidya'].unique()
 nama_choice = st.selectbox("Pilih Nama", nama_list, key="nama_choice")
 
-# Menampilkan jumlah nama di Kabupaten yang dipilih
-st.write(f"Jumlah nama di Kabupaten {kabupaten_choice}: {len(filtered_df)}")
-
-# Reset form jika nama diubah
-if "nama_choice" in st.session_state and st.session_state.nama_choice != nama_choice:
-    reset_form()
+# Filter lebih lanjut jika nama terpilih memiliki lebih dari satu NIK
+selected_data_by_name = filtered_df[filtered_df['Nama Purnawidya'] == nama_choice]
+if len(selected_data_by_name) > 1:
+    st.warning("Terdapat nama yang sama di kabupaten ini. Silakan pilih berdasarkan NIK.")
+    nik_list = selected_data_by_name['NIK'].unique()
+    nik_choice = st.selectbox("Pilih NIK", nik_list, key="nik_choice")
+    selected_data = selected_data_by_name[selected_data_by_name['NIK'] == nik_choice].iloc[0]
+else:
+    selected_data = selected_data_by_name.iloc[0]
 
 # Menampilkan data peserta
-selected_data = filtered_df[filtered_df['Nama Purnawidya'] == nama_choice].iloc[0]
 st.write("### Data Peserta:")
 st.write(f"**NIK**: {selected_data['NIK']}")
 st.write(f"**Alamat**: {selected_data['Alamat']}")
@@ -159,7 +163,7 @@ if submit_button:
         # Query untuk mengecek apakah NIK atau Nama sudah ada di database
         check_query = """
             SELECT COUNT(*) FROM data_peserta 
-            WHERE NIK = %s AND Nama = %s
+            WHERE NIK = %s OR Nama = %s
         """
         cursor_check.execute(check_query, (selected_data['NIK'], selected_data['Nama Purnawidya']))
         result = cursor_check.fetchone()
